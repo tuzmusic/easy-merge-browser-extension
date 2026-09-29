@@ -1,0 +1,29 @@
+{
+  "name": "easy-merge",
+  "version": "1.0.0",
+  "description": "Gmail extension: fill _WILDCARDS before sending",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@inboxsdk/core": "^2.2.27",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^3.0.0",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/chrome": "^0.3.4",
+    "happy-dom": "^20.14.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "type": "module",
+  "private": "true"
+}
