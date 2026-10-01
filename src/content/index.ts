@@ -4,6 +4,7 @@ import { autofill } from '../lib/autofill';
 import { IgnoreList } from '../lib/guard';
 import { getLastValues, rememberValues } from '../lib/memory';
 import { showDialog } from '../ui/mount';
+import { textOfElement } from '../lib/wildcards';
 
 const appId = import.meta.env.VITE_INBOXSDK_APP_ID;
 if (!appId) {
@@ -19,7 +20,7 @@ InboxSDK.load(2, appId ?? '').then((sdk) => {
 
     compose.on('presending', (event) => {
       if (sendingNow) return;
-      const wildcards = ignoreList.pending(compose, compose.getSubject(), compose.getTextContent());
+      const wildcards = ignoreList.pending(compose, compose.getSubject(), textOfElement(compose.getBodyElement()));
       if (!wildcards.length) return;
 
       // Must be synchronous; the dialog is async and re-sends afterwards.

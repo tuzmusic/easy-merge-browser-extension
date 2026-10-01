@@ -5,7 +5,7 @@ export default defineManifest({
   name: 'EasyMerge',
   version: '0.1.0',
   description: 'Never send a Gmail draft with unfilled _WILDCARDS. Fill them in a quick dialog before sending.',
-  permissions: [],
+  permissions: ['scripting'],
   host_permissions: ['https://mail.google.com/*', 'https://inbox.google.com/*'],
   background: { service_worker: 'src/background/index.ts', type: 'module' },
   content_scripts: [
@@ -13,12 +13,6 @@ export default defineManifest({
       matches: ['https://mail.google.com/*', 'https://inbox.google.com/*'],
       js: ['src/content/index.ts'],
       run_at: 'document_end',
-    },
-    {
-      matches: ['https://mail.google.com/*', 'https://inbox.google.com/*'],
-      js: ['src/content/page-world.ts'],
-      run_at: 'document_start',
-      world: 'MAIN',
     },
   ],
 });

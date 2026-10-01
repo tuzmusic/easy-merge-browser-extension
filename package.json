@@ -6,7 +6,11 @@
     "test": "vitest run",
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sync-sdk": "mkdir -p public && cp node_modules/@inboxsdk/core/pageWorld.js public/pageWorld.js",
+    "predev": "npm run sync-sdk",
+    "prebuild": "npm run sync-sdk",
+    "postinstall": "npm run sync-sdk"
   },
   "keywords": [],
   "author": "",

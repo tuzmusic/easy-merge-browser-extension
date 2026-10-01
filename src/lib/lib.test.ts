@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { applyValues } from './apply';
-import { autofill, companyFromEmail, firstNameFromRecipient } from './autofill';
+import {
+  autofill, companyFromEmail, firstNameFromRecipient, fullNameFromRecipient, lastNameFromRecipient,
+} from './autofill';
 import { IgnoreList } from './guard';
-import { findWildcards, replaceWildcardsInElement, replaceWildcardsInText } from './wildcards';
+import { findWildcards, replaceWildcardsInElement, replaceWildcardsInText, textOfElement } from './wildcards';
 
 describe('findWildcards', () => {
   it('finds distinct _ALLCAPS tokens including inner underscores', () => {
@@ -29,6 +31,13 @@ describe('replace', () => {
     expect(div.textContent).toBe('Hi Jane, welcome to Acme!');
     expect(div.innerHTML).not.toContain('_');
   });
+  it('finds and replaces wildcards on separate Gmail lines', () => {
+    const div = document.createElement('div');
+    div.innerHTML = 'full _FULLNAME<div>first _FIRST_NAME</div><div>last _LAST_NAME<br>month _MONTH</div>';
+    expect(findWildcards(textOfElement(div))).toEqual(['_FULLNAME', '_FIRST_NAME', '_LAST_NAME', '_MONTH']);
+    replaceWildcardsInElement(div, { _FULLNAME: 'Jane Doe', _FIRST_NAME: 'Jane', _LAST_NAME: 'Doe', _MONTH: 'May' });
+    expect(div.innerHTML).toBe('full Jane Doe<div>first Jane</div><div>last Doe<br>month May</div>');
+  });
 });
 
 describe('autofill', () => {
@@ -37,6 +46,15 @@ describe('autofill', () => {
     expect(firstNameFromRecipient({ emailAddress: 'a@b.com', name: 'Doe, Jane' })).toBe('Jane');
     expect(firstNameFromRecipient({ emailAddress: 'john.smith@b.com' })).toBe('John');
     expect(firstNameFromRecipient({ emailAddress: 'x1@b.com' })).toBeUndefined();
+  });
+  it('last and full names', () => {
+    expect(lastNameFromRecipient({ emailAddress: 'a@b.com', name: 'jane q. doe' })).toBe('Doe');
+    expect(fullNameFromRecipient({ emailAddress: 'a@b.com', name: 'jane q. doe' })).toBe('Jane Q. Doe');
+    expect(fullNameFromRecipient({ emailAddress: 'a@b.com', name: 'Doe, Jane' })).toBe('Jane Doe');
+    expect(fullNameFromRecipient({ emailAddress: 'a@b.com', name: "Sean O'Brien-McDonald" })).toBe("Sean O'Brien-McDonald");
+    expect(fullNameFromRecipient({ emailAddress: 'JOHN.SMITH+news@b.com' })).toBe('John Smith');
+    expect(lastNameFromRecipient({ emailAddress: 'a@b.com', name: 'Cher' })).toBeUndefined();
+    expect(fullNameFromRecipient({ emailAddress: 'x1@b.com' })).toBeUndefined();
   });
   it('companies', () => {
     expect(companyFromEmail('a@acme.com')).toBe('Acme');
