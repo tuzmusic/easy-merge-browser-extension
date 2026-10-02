@@ -89,3 +89,14 @@ export function replaceWildcardsInElement(root: HTMLElement, values: Record<stri
     }
   }
 }
+
+// Gmail's auto-inserted signature, and the "-- " line before it.
+const SIGNATURE_SELECTOR = '.gmail_signature, .gmail_signature_prefix, [data-smartmail="gmail_signature"]';
+
+/** True for a fresh compose: no subject and nothing in the body besides the signature. */
+export function isBlankDraft(subject: string, body: HTMLElement): boolean {
+  if (subject.trim()) return false;
+  const copy = body.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll(SIGNATURE_SELECTOR).forEach((el) => el.remove());
+  return !textOfElement(copy).trim();
+}

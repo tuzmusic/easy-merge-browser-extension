@@ -4,7 +4,7 @@ import {
   autofill, companyFromEmail, firstNameFromRecipient, fullNameFromRecipient, lastNameFromRecipient,
 } from './autofill';
 import { IgnoreList } from './guard';
-import { findWildcards, replaceWildcardsInElement, replaceWildcardsInText, textOfElement } from './wildcards';
+import { findWildcards, isBlankDraft, replaceWildcardsInElement, replaceWildcardsInText, textOfElement } from './wildcards';
 
 describe('findWildcards', () => {
   it('finds distinct _ALLCAPS tokens including inner underscores', () => {
@@ -91,5 +91,19 @@ describe('applyValues', () => {
     );
     expect(subject).toBe('About Acme');
     expect(body.textContent).toBe('Hello Jane');
+  });
+});
+
+describe('isBlankDraft', () => {
+  const body = (html: string) => Object.assign(document.createElement('div'), { innerHTML: html });
+  const signature = '<div><br></div><span class="gmail_signature_prefix">-- </span>'
+    + '<div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">Jonathan<div>555-1234</div></div>';
+  it('treats a signature-only draft as blank', () => {
+    expect(isBlankDraft('', body(signature))).toBe(true);
+    expect(isBlankDraft('', body(''))).toBe(true);
+  });
+  it('is not blank with a subject or body text', () => {
+    expect(isBlankDraft('Hello', body(signature))).toBe(false);
+    expect(isBlankDraft('', body(`<div>Hi there</div>${signature}`))).toBe(false);
   });
 });

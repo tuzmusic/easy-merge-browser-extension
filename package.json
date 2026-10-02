@@ -10,7 +10,9 @@
     "sync-sdk": "mkdir -p public && cp node_modules/@inboxsdk/core/pageWorld.js public/pageWorld.js",
     "predev": "npm run sync-sdk",
     "prebuild": "npm run sync-sdk",
-    "postinstall": "npm run sync-sdk"
+    "postinstall": "npm run sync-sdk",
+    "release": "npm run typecheck && npm test && npm run build && mkdir -p release && rm -f release/easymerge-$npm_package_version.zip && cd dist && zip -qr ../release/easymerge-$npm_package_version.zip . -x '.*'",
+    "store-assets": "node store/assets-src/render.mjs"
   },
   "keywords": [],
   "author": "",
@@ -29,5 +31,5 @@
     "vitest": "^5.0.2"
   },
   "type": "module",
-  "private": "true"
+  "private": true
 }
