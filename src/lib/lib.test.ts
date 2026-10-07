@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyValues } from './apply';
 import {
   autofill, companyFromEmail, firstNameFromRecipient, fullNameFromRecipient, lastNameFromRecipient,
 } from './autofill';
 import { IgnoreList } from './guard';
-import { findWildcards, isBlankDraft, replaceWildcardsInElement, replaceWildcardsInText, textOfElement } from './wildcards';
+import {
+  buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sendOne, sharedValues, uniqueRecipients,
+  type OutgoingMessage, type RowStatus, type Sender,
+} from './merge';
+import {
+  fillHTML, findWildcards, isBlankDraft, replaceWildcardsInElement, replaceWildcardsInText, textOfElement,
+} from './wildcards';
 
 describe('findWildcards', () => {
   it('finds distinct _ALLCAPS tokens including inner underscores', () => {
@@ -105,5 +111,146 @@ describe('isBlankDraft', () => {
   it('is not blank with a subject or body text', () => {
     expect(isBlankDraft('Hello', body(signature))).toBe(false);
     expect(isBlankDraft('', body(`<div>Hi there</div>${signature}`))).toBe(false);
+  });
+});
+
+describe('fillHTML', () => {
+  it('fills split spans and Gmail lines, and leaves unknown wildcards', () => {
+    expect(fillHTML('Hi <b>_FIR</b>ST_NAME,<div>at _COMPANY</div><div>_OTHER</div>', { _FIRST_NAME: 'Jane', _COMPANY: 'Acme' }))
+      .toBe('Hi <b>Jane</b>,<div>at Acme</div><div>_OTHER</div>');
+  });
+});
+
+describe('merge helpers', () => {
+  it('dedupes recipients by address', () => {
+    expect(uniqueRecipients([
+      { emailAddress: 'a@x.com', name: 'A' }, { emailAddress: 'b@x.com' }, { emailAddress: 'A@X.com' },
+    ])).toEqual([{ emailAddress: 'a@x.com', name: 'A' }, { emailAddress: 'b@x.com' }]);
+  });
+  it('formats addresses', () => {
+    expect(formatAddress({ emailAddress: 'jane@acme.com', name: 'Jane Doe' })).toBe('"Jane Doe" <jane@acme.com>');
+    expect(formatAddress({ emailAddress: 'jane@acme.com', name: 'Jane "JD" Doe' })).toBe('"Jane \\"JD\\" Doe" <jane@acme.com>');
+    expect(formatAddress({ emailAddress: 'jane@acme.com' })).toBe('jane@acme.com');
+    expect(formatAddress({ emailAddress: 'jane@acme.com', name: 'jane@acme.com' })).toBe('jane@acme.com');
+  });
+  it('builds one message per row', () => {
+    const message = buildMessage(
+      { subject: 'For _COMPANY', html: '<div>Hi _NAME</div>' },
+      { cc: [{ emailAddress: 'c@x.com' }], bcc: [], from: { emailAddress: 'me@x.com', name: 'Me' } },
+      { recipient: { emailAddress: 'jane@acme.com', name: 'Jane' }, values: { _NAME: 'Jane', _COMPANY: 'Acme' } },
+    );
+    expect(message).toEqual({
+      to: { emailAddress: 'jane@acme.com', name: 'Jane' }, cc: [{ emailAddress: 'c@x.com' }], bcc: [],
+      from: { emailAddress: 'me@x.com', name: 'Me' },
+      subject: 'For Acme', html: '<div>Hi Jane</div>',
+    });
+  });
+  it('remembers only values shared by every row', () => {
+    const row = (values: Record<string, string>) => ({ recipient: { emailAddress: 'a@x.com' }, values });
+    expect(sharedValues([row({ _NAME: 'Jane', _MONTH: 'May' }), row({ _NAME: 'Bob', _MONTH: 'May' })]))
+      .toEqual({ _MONTH: 'May' });
+    expect(sharedValues([])).toEqual({});
+  });
+  it('detects attachments', () => {
+    const el = document.createElement('div');
+    expect(hasAttachments(el)).toBe(false);
+    el.innerHTML = '<input type="hidden" name="attach" value="x">';
+    expect(hasAttachments(el)).toBe(true);
+  });
+});
+
+const message = (to: string): OutgoingMessage => ({ to: { emailAddress: to }, cc: [], bcc: [], subject: 's', html: 'h' });
+
+describe('runMerge', () => {
+  const run = (sender: Sender, opts: { shouldStop?(): boolean } = {}) => {
+    const reports: [number, RowStatus][] = [];
+    const result = runMerge({
+      messages: ['a', 'b', 'c'].map(message), sender, pauseMs: 0, report: (i, s) => reports.push([i, s]), ...opts,
+    });
+    return { result, reports };
+  };
+
+  it('sends in order', async () => {
+    const sent: string[] = [];
+    const { result, reports } = run({ send: async (m) => void sent.push(m.to.emailAddress) });
+    expect(await result).toEqual(['sent', 'sent', 'sent']);
+    expect(sent).toEqual(['a', 'b', 'c']);
+    expect(reports).toEqual([[0, 'sending'], [0, 'sent'], [1, 'sending'], [1, 'sent'], [2, 'sending'], [2, 'sent']]);
+  });
+  it('stops at the first failure', async () => {
+    const sent: string[] = [];
+    const { result } = run({
+      send: async (m) => {
+        if (m.to.emailAddress === 'b') throw new Error('quota');
+        sent.push(m.to.emailAddress);
+      },
+    });
+    expect(await result).toEqual(['sent', 'failed', 'queued']);
+    expect(sent).toEqual(['a']);
+  });
+  it('stops when asked', async () => {
+    let calls = 0;
+    const { result } = run({ send: async () => void calls++ }, { shouldStop: () => calls >= 1 });
+    expect(await result).toEqual(['sent', 'queued', 'queued']);
+  });
+});
+
+/** Stand-in for an InboxSDK ComposeView that records what was set and emits events on demand. */
+function fakeCompose() {
+  const listeners: Record<string, (() => void)[]> = {};
+  const fields: Record<string, unknown> = {};
+  const compose = {
+    fields,
+    emit: (event: string) => listeners[event]?.forEach((fn) => fn()),
+    on: (event: string, fn: () => void) => void (listeners[event] ??= []).push(fn),
+    setToRecipients: (v: string[]) => void (fields.to = v),
+    setCcRecipients: (v: string[]) => void (fields.cc = v),
+    setBccRecipients: (v: string[]) => void (fields.bcc = v),
+    setFromEmail: (v: string) => void (fields.from = v),
+    setSubject: (v: string) => void (fields.subject = v),
+    setBodyHTML: (v: string) => void (fields.html = v),
+    send: () => void (fields.sent = true),
+  };
+  return compose;
+}
+
+describe('sendOne', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('fills the compose and resolves when Gmail starts sending', async () => {
+    const compose = fakeCompose();
+    const done = sendOne(compose, {
+      ...message('j@x.com'), to: { emailAddress: 'j@x.com', name: 'Jane' }, cc: [{ emailAddress: 'c@x.com' }],
+      from: { emailAddress: 'me@x.com', name: 'Me' },
+    });
+    expect(compose.fields).toEqual({
+      to: ['"Jane" <j@x.com>'], cc: ['c@x.com'], bcc: [], from: 'me@x.com', subject: 's', html: 'h', sent: true,
+    });
+    compose.emit('sending');
+    await expect(done).resolves.toBeUndefined();
+  });
+  it('fails when the send is canceled', async () => {
+    const compose = fakeCompose();
+    const done = sendOne(compose, message('a'));
+    compose.emit('sendCanceled');
+    await expect(done).rejects.toThrow('canceled');
+  });
+  it('fails when Gmail never sends', async () => {
+    vi.useFakeTimers();
+    const done = sendOne(fakeCompose(), message('a'), 1000);
+    vi.advanceTimersByTime(1000);
+    await expect(done).rejects.toThrow("didn't send");
+  });
+  it('opens a new compose per message', async () => {
+    const opened: ReturnType<typeof fakeCompose>[] = [];
+    const sender = composeSender(async () => {
+      const compose = fakeCompose();
+      opened.push(compose);
+      compose.send = () => void compose.emit('sending');
+      return compose;
+    });
+    await sender.send(message('a'));
+    await sender.send(message('b'));
+    expect(opened.map((c) => c.fields.to)).toEqual([['a'], ['b']]);
   });
 });

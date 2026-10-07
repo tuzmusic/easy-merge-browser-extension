@@ -90,6 +90,14 @@ export function replaceWildcardsInElement(root: HTMLElement, values: Record<stri
   }
 }
 
+/** `replaceWildcardsInElement` for an HTML string, done on a detached copy. */
+export function fillHTML(html: string, values: Record<string, string>): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  replaceWildcardsInElement(div, values);
+  return div.innerHTML;
+}
+
 // Gmail's auto-inserted signature, and the "-- " line before it.
 const SIGNATURE_SELECTOR = '.gmail_signature, .gmail_signature_prefix, [data-smartmail="gmail_signature"]';
 

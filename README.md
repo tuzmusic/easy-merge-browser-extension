@@ -22,8 +22,10 @@ unfilled wildcard can't go out unless you say so.
   template editor.
 - **Send catches it.** EasyMerge intercepts Gmail's Send button, finds the wildcards in the subject and body, and opens a
   dialog with one field per wildcard.
-- **Autofills what it can.** First name, last name, full name, and company come from the first recipient (display name,
+- **Autofills what it can.** First name, last name, full name, and company come from the recipient (display name,
   or the address itself; free-mail domains like gmail.com are ignored for company).
+- **Several recipients, one email each.** With two or more `To` recipients, the dialog becomes a table with a row per
+  recipient, and each one gets their own email with their own values.
 - **Remembers what you used.** Your last value for each wildcard shows as ghost text. Tab accepts it; "Fill N previous
   values" accepts them all.
 - **One click to send the next one.** The compose-toolbar button reinserts your last EasyMerge email with its wildcards
@@ -50,7 +52,7 @@ unfilled wildcard can't go out unless you say so.
 src/
   background/   service worker (InboxSDK page-world loader)
   content/      Gmail integration entry point
-  lib/          wildcards, autofill, guard, template memory, apply (tested)
+  lib/          wildcards, autofill, guard, template memory, apply, merge (tested)
   ui/           Preact dialog and popover
 store/          Web Store listing, privacy policy, release steps, screenshot renderer
 ```
@@ -72,6 +74,21 @@ Without an app ID, `npm run dev` loads but InboxSDK won't initialize, and `npm r
 - Name/company aliases (which wildcard names autofill) live in `src/lib/autofill.ts`.
 - Last-used values are remembered for the Gmail tab only.
 - "Send anyway" skips the check for that compose window; closing the dialog does not.
+
+### Several recipients
+
+- Two or more `To` recipients turn the dialog into a table: one row per recipient, one column per
+  wildcard, each row autofilled from its own recipient. "↓ all" copies a column's value to the empty
+  cells (not offered for names and companies). × drops a recipient.
+- Send opens a new Gmail compose window per row, fills it, and sends it, one after another, behind the
+  dialog. The original draft is discarded once everyone has been sent their copy.
+- Cc and Bcc go on every email, and the From address (send-as alias) is kept.
+- Stop, or a failure, ends the run. The draft stays open, addressed to whoever didn't get it yet, and
+  Send picks up where it left off with the values you typed.
+- "Send anyway" asks first, then sends the original single email to everyone, wildcards unfilled.
+- Not split: replies and forwards (threading, forwarded attachments). They fill in place as before.
+- Drafts with attachments can't be merged yet (they can't be copied to the new emails).
+- Gmail's daily sending limits apply (about 500 recipients a day for personal accounts).
 
 ## Publishing
 

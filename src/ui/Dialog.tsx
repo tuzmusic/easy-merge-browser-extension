@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { WildcardInput } from './WildcardInput';
 
 export interface DialogProps {
   wildcards: string[];
@@ -26,16 +27,6 @@ export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway
   // the dialog doesn't jump; if it never applies, don't reserve anything.
   const [showsPill] = useState(() => wildcards.filter((w) => !autofilled[w]?.trim() && lastValues[w]).length > 1);
 
-  // Tab (or → in an empty field) accepts the ghost text; Tab still moves on to the next field.
-  const acceptGhost = (w: string, e: KeyboardEvent) => {
-    if (!hasGhost(w)) return;
-    if (e.key === 'Tab' && !e.shiftKey) set(w, lastValues[w]);
-    else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      set(w, lastValues[w]);
-    }
-  };
-
   const submit = (e: Event) => {
     e.preventDefault();
     if (complete) onSend(values);
@@ -51,18 +42,11 @@ export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway
           {wildcards.map((w) => (
             <label key={w} class="field">
               <span class="name">{w}</span>
-              <input
-                ref={w === firstEmptyWildcard ? firstEmpty : undefined}
+              <WildcardInput
+                inputRef={w === firstEmptyWildcard ? firstEmpty : undefined}
                 value={values[w] ?? ''}
-                placeholder={lastValues[w] ? `⇥ ${lastValues[w]}` : ''}
-                title={hasGhost(w) ? `${lastValues[w]} (press Tab to reuse)` : undefined}
-                autocomplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                data-bwignore
-                data-form-type="other"
-                onInput={(e) => set(w, (e.target as HTMLInputElement).value)}
-                onKeyDown={(e) => acceptGhost(w, e)}
+                ghost={lastValues[w]}
+                onChange={(v) => set(w, v)}
               />
             </label>
           ))}

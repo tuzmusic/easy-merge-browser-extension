@@ -26,7 +26,9 @@ Write your email the way you always do. Type wildcards directly in the email: _F
 
 That's it. Really.
 
-Ready for the next recipient? Open a new message and click the EasyMerge button in the compose toolbar. Your last EasyMerge email comes back with its wildcards intact. Add a recipient, hit Send, and fill in the wildcards. (Support for sending to multiple recipients at a time coming soon.)
+Sending to several people? Put them all in the To field. EasyMerge shows one row per recipient, fills in what it can, and sends each person their own copy.
+
+Want to send it again later? Open a new message and click the EasyMerge button in the compose toolbar. Your last EasyMerge email comes back with its wildcards intact.
 
 Private by design. Everything happens in your Gmail tab. EasyMerge has no server and never sends your email content anywhere.
 ```
@@ -52,7 +54,7 @@ The dialog in the screenshots is the real component with the real autofill (sour
 **Single purpose:**
 
 ```text
-EasyMerge turns any Gmail draft into a mail-merge template: the user types wildcards like _FIRST_NAME, and when they click Send, EasyMerge asks for each wildcard's value, fills it in, and sends. It can also reinsert the user's last such email into a new draft to send it again.
+EasyMerge turns any Gmail draft into a mail-merge template: the user types wildcards like _FIRST_NAME, and when they click Send, EasyMerge asks for each wildcard's value, fills it in, and sends, one separate copy per recipient when there are several. It can also reinsert the user's last such email into a new draft to send it again.
 ```
 
 **Permission justifications** (one field per permission):
@@ -60,7 +62,7 @@ EasyMerge turns any Gmail draft into a mail-merge template: the user types wildc
 Host permission `https://mail.google.com/*`:
 
 ```text
-The extension's only function runs in Gmail: it reads the draft being sent to find wildcards, shows the fill-in dialog, writes the values into the draft, and adds a compose-toolbar button that reinserts the last EasyMerge email. It does not run on any other site.
+The extension's only function runs in Gmail: it reads the draft being sent to find wildcards, shows the fill-in dialog, writes the values into the draft (or into one new Gmail compose window per recipient when there are several), and adds a compose-toolbar button that reinserts the last EasyMerge email. It does not run on any other site.
 ```
 
 `storage`:
@@ -81,8 +83,8 @@ the package.)
 **Data usage, what's collected.** "Collected" in the dashboard means handled by the extension, even
 if only locally. Check:
 
-- [x] **Personally identifiable information**: recipient names and email addresses, read from the
-      draft to autofill name and company.
+- [x] **Personally identifiable information**: recipient names and email addresses (To, Cc, Bcc, From),
+      read from the draft to autofill name and company and to address each separate copy.
 - [x] **Personal communications**: the draft's subject and body, read to find and fill wildcards. The last
       EasyMerge email is also stored locally (unfilled) for the reinsert button.
 - [x] **Website content**: the Gmail compose window.

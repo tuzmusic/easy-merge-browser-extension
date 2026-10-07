@@ -1,10 +1,14 @@
 import * as InboxSDK from '@inboxsdk/core';
 import { applyValues } from '../lib/apply';
-import { autofill } from '../lib/autofill';
+import { autofill, type Recipient } from '../lib/autofill';
 import { IgnoreList } from '../lib/guard';
+import {
+  buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sharedValues, uniqueRecipients,
+  type Envelope,
+} from '../lib/merge';
 import { getLastValues, rememberValues } from '../lib/memory';
 import { loadTemplate, saveTemplate, type Template } from '../lib/template';
-import { showDialog } from '../ui/mount';
+import { showDialog, showMergeDialog } from '../ui/mount';
 import { showPopover } from '../ui/Popover';
 import { isBlankDraft, textOfElement } from '../lib/wildcards';
 
@@ -14,6 +18,10 @@ if (!appId) {
 }
 
 const ignoreList = new IgnoreList();
+// Values typed per recipient (keyed by lowercased email), so a stopped or failed merge reopens with them.
+const typedRows = new WeakMap<object, Map<string, Record<string, string>>>();
+// While a merge runs, the compose windows it opens send themselves and must not be intercepted.
+let merging = false;
 
 // eventTracking off: InboxSDK's usage analytics are of no use to us, and off keeps the privacy policy simple.
 // InboxSDK still reports its own internal errors to its maintainers (disclosed in store/PRIVACY.md).
@@ -53,15 +61,14 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
       if (unfilled) saveTemplate(unfilled);
     });
 
-    compose.on('presending', (event) => {
-      if (sendingNow) return;
-      const wildcards = ignoreList.pending(compose, compose.getSubject(), textOfElement(compose.getBodyElement()));
-      if (!wildcards.length) return;
+    const sendAnyway = (wildcards: string[]) => {
+      ignoreList.ignore(compose, wildcards);
+      sendingNow = true;
+      compose.send();
+    };
 
-      // Must be synchronous; the dialog is async and re-sends afterwards.
-      event.cancel();
-
-      const recipients = compose.getToRecipients();
+    // One recipient (or a reply/forward): fill this draft in place and send it.
+    const fillAndSend = (wildcards: string[], recipients: Recipient[]) => {
       showDialog({
         wildcards,
         autofilled: autofill(wildcards, recipients),
@@ -69,15 +76,78 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
       }).then((result) => {
         if (result.action === 'cancel') return;
         unfilled = { subject: compose.getSubject(), html: compose.getHTMLContent() };
-        if (result.action === 'send') {
-          rememberValues(result.values);
-          applyValues(compose, result.values);
-        } else {
-          ignoreList.ignore(compose, wildcards);
-        }
+        if (result.action === 'sendAnyway') return sendAnyway(wildcards);
+        rememberValues(result.values);
+        applyValues(compose, result.values);
         sendingNow = true;
         compose.send();
       });
+    };
+
+    // Several recipients: this draft is the template; each recipient gets their own email.
+    const merge = (wildcards: string[], recipients: Recipient[]) => {
+      const template: Template = { subject: compose.getSubject(), html: compose.getHTMLContent() };
+      const envelope: Envelope = {
+        cc: compose.getCcRecipients(),
+        bcc: compose.getBccRecipients(),
+        from: compose.getFromContact(),
+      };
+      const typed = typedRows.get(compose);
+
+      showMergeDialog({
+        wildcards,
+        initialRows: recipients.map((recipient) => ({
+          recipient,
+          values: { ...autofill(wildcards, [recipient]), ...typed?.get(recipient.emailAddress.toLowerCase()) },
+        })),
+        lastValues: getLastValues(),
+        hasCopies: envelope.cc.length + envelope.bcc.length > 0,
+        hasAttachments: hasAttachments(compose.getElement()),
+        run: async (rows, report, shouldStop) => {
+          merging = true;
+          try {
+            return await runMerge({
+              messages: rows.map((row) => buildMessage(template, envelope, row)),
+              sender: composeSender(() => sdk.Compose.openNewComposeView()),
+              report,
+              shouldStop,
+            });
+          } finally {
+            merging = false;
+          }
+        },
+      }).then((result) => {
+        if (result.action === 'cancel') return;
+        if (result.action === 'sendAnyway') {
+          unfilled = template;
+          return sendAnyway(wildcards);
+        }
+        const sent = result.rows.filter((_, i) => result.statuses[i] === 'sent');
+        const unsent = result.rows.filter((_, i) => result.statuses[i] !== 'sent');
+        if (sent.length) {
+          saveTemplate(template);
+          rememberValues(sharedValues(sent));
+        }
+        if (!unsent.length) return compose.discard();
+        // Leave the draft addressed to whoever didn't get it, so Send picks up where this left off.
+        typedRows.set(compose, new Map(unsent.map((row) => [row.recipient.emailAddress.toLowerCase(), row.values])));
+        compose.setToRecipients(unsent.map((row) => formatAddress(row.recipient)));
+      });
+    };
+
+    compose.on('presending', (event) => {
+      if (sendingNow || merging) return;
+      const wildcards = ignoreList.pending(compose, compose.getSubject(), textOfElement(compose.getBodyElement()));
+      if (!wildcards.length) return;
+
+      // Must be synchronous; the dialog is async and re-sends afterwards.
+      event.cancel();
+
+      const recipients = uniqueRecipients(compose.getToRecipients());
+      // Splitting a reply would break the thread, and a forward's attachments can't be copied.
+      const canSplit = !compose.isReply() && !compose.isForward();
+      if (recipients.length > 1 && canSplit) merge(wildcards, recipients);
+      else fillAndSend(wildcards, recipients);
     });
   });
 });
