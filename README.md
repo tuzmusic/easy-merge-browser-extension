@@ -19,8 +19,9 @@ The compose-toolbar button reinserts your last EasyMerge email, wildcards unfill
 - Two or more `To` recipients turn the dialog into a table: one row per recipient, one column per
   wildcard, each row autofilled from its own recipient. "↓ all" copies a column's value to the empty
   cells (not offered for names and companies). × drops a recipient.
-- Send opens a new Gmail compose window per row, fills it, and sends it, one after another, behind the
-  dialog. The original draft is discarded once everyone has been sent their copy.
+- Send sends each row its own copy through the Gmail API, after a one-time Google consent popup. Without
+  an OAuth client ID (or if you decline), it opens a Gmail compose window per row behind the dialog,
+  fills it, and sends it instead. The original draft is discarded once everyone has their copy.
 - Cc and Bcc go on every email, and the From address (send-as alias) is kept.
 - Stop, or a failure, ends the run. The draft stays open, addressed to whoever didn't get it yet, and
   Send picks up where it left off with the values you typed.
@@ -33,12 +34,13 @@ The compose-toolbar button reinserts your last EasyMerge email, wildcards unfill
 
 ```bash
 npm install
-cp .env.example .env   # set VITE_INBOXSDK_APP_ID (free at inboxsdk.com)
+cp .env.example .env   # set VITE_INBOXSDK_APP_ID (free at inboxsdk.com); Gmail API vars are optional
 npm run dev            # or: npm run build, then load dist/ at chrome://extensions
 npm test
 ```
 
 Without an app ID, `npm run dev` loads but InboxSDK won't initialize, and `npm run build` refuses to run.
+For sending through the Gmail API, see "Gmail API setup" in [store/RELEASING.md](store/RELEASING.md).
 
 ## Publishing
 

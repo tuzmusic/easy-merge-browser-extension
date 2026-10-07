@@ -17,8 +17,16 @@ To do that, EasyMerge reads the following from the Gmail compose window you are 
 
 ## What EasyMerge does with it
 
-All of this happens inside your browser, in the Gmail tab. Separate copies are sent the same way you
-send any email: EasyMerge opens a Gmail compose window for each one, fills it in, and clicks Send.
+All of this happens inside your browser. Separate copies are sent one of two ways:
+
+- **Through the Gmail API**, if you allow it. The first time, Google asks you to let EasyMerge "send
+  email on your behalf" (and see your email address, which EasyMerge only uses to check that Google
+  signed in the same account as your Gmail tab). EasyMerge then sends each copy straight from your
+  browser to Google's Gmail API. The access token Google issues is kept in the browser's session storage,
+  is never written to disk, and is gone when the browser closes. EasyMerge can't read your mail with it.
+  You can revoke access anytime at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+- **Through Gmail itself**, if you don't: EasyMerge opens a Gmail compose window for each copy, fills it
+  in, and clicks Send.
 
 - EasyMerge does **not** send your email content, recipients, or the values you type to the developer
   or to any server. The developer has no server and receives none of your data.
@@ -45,12 +53,17 @@ handles them.
 - **Access to mail.google.com**: required to show the dialog in Gmail and read the draft you are sending.
 - **storage**: keeps your last EasyMerge email on your device for the "Insert last EasyMerge email" button.
 - **scripting**: used by InboxSDK to load its Gmail integration into the Gmail page.
+- **identity**: shows Google's sign-in and consent window for sending through the Gmail API.
+- **Access to gmail.googleapis.com and oauth2.googleapis.com**: sends the merged emails, and checks which
+  account Google signed in.
 
 EasyMerge does not run on any other website.
 
 ## Limited Use
 
-EasyMerge's use of information received from Gmail complies with the
+EasyMerge's use of information received from Gmail and Google APIs complies with the
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)
+and the
 [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq),
 including the Limited Use requirements. Data is used only to provide the wildcard-filling feature
 described above, is not transferred to anyone, and is not used for advertising, credit-worthiness, or

@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_INBOXSDK_APP_ID?: string;
+  readonly VITE_GOOGLE_OAUTH_CLIENT_ID?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

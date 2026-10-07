@@ -1,10 +1,11 @@
 import * as InboxSDK from '@inboxsdk/core';
 import { applyValues } from '../lib/apply';
 import { autofill, type Recipient } from '../lib/autofill';
+import { apiSender, authorize } from '../lib/gmailApi';
 import { IgnoreList } from '../lib/guard';
 import {
   buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sharedValues, uniqueRecipients,
-  type Envelope,
+  type Envelope, type Sender,
 } from '../lib/merge';
 import { getLastValues, rememberValues } from '../lib/memory';
 import { loadTemplate, saveTemplate, type Template } from '../lib/template';
@@ -26,6 +27,16 @@ let merging = false;
 // eventTracking off: InboxSDK's usage analytics are of no use to us, and off keeps the privacy policy simple.
 // InboxSDK still reports its own internal errors to its maintainers (disclosed in store/PRIVACY.md).
 InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, globalErrorLogging: false }).then((sdk) => {
+  // The Gmail API when it's set up and the user allows it (no compose windows, real errors); otherwise
+  // Gmail compose windows, which need nothing.
+  const pickSender = async (): Promise<{ sender: Sender; pauseMs?: number }> => {
+    const account = sdk.User.getEmailAddress();
+    const auth = await authorize(account);
+    if (auth.ok) return { sender: apiSender(account), pauseMs: 300 };
+    console.warn(`[EasyMerge] Not using the Gmail API (${auth.error}); sending through compose windows.`);
+    return { sender: composeSender(() => sdk.Compose.openNewComposeView()) };
+  };
+
   sdk.Compose.registerComposeViewHandler((compose) => {
     // The send we trigger ourselves after the dialog must not be intercepted again.
     let sendingNow = false;
@@ -108,7 +119,7 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
           try {
             return await runMerge({
               messages: rows.map((row) => buildMessage(template, envelope, row)),
-              sender: composeSender(() => sdk.Compose.openNewComposeView()),
+              ...(await pickSender()),
               report,
               shouldStop,
             });

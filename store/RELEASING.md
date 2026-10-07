@@ -10,9 +10,28 @@
 ## The InboxSDK app ID
 
 The app ID from inboxsdk.com is a public identifier, not a secret. Vite inlines it into the content
-script at build time from `.env`, so it ships inside the zip. That's all the published extension needs.
-There is no OAuth or API key because the extension never calls a Google API: it works in the user's
-own signed-in Gmail tab.
+script at build time from `.env`, so it ships inside the zip.
+
+## Gmail API setup
+
+Merges send through the Gmail API when `VITE_GOOGLE_OAUTH_CLIENT_ID` is set, and through Gmail compose
+windows when it isn't (or when the user declines access). The client ID is public too; it ships in the zip.
+
+1. Pin the extension ID. In the Web Store dashboard, open the item's **Package** tab and copy the public
+   key into `.env` as `EXTENSION_PUBLIC_KEY`, so unpacked builds get the store item's ID. Rebuild, and
+   note the ID shown at chrome://extensions. `npm run release` leaves the key out of the zip.
+2. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the
+   **Gmail API** (APIs & Services → Library).
+3. **OAuth consent screen**: External. App name EasyMerge, support email, homepage and privacy policy
+   URLs from [LISTING.md](LISTING.md). Scopes: `.../auth/gmail.send` and `email`. While in **Testing**,
+   add every account that will use it as a test user (up to 100); they'll see an "unverified app" warning.
+4. **Credentials → Create OAuth client ID → Web application**. Authorized redirect URI:
+   `https://<extension-id>.chromiumapp.org/` (with the trailing slash).
+5. Put the client ID in `.env` as `VITE_GOOGLE_OAUTH_CLIENT_ID` and rebuild.
+
+To go beyond test users, submit the consent screen for verification. `gmail.send` is a *sensitive*
+scope, not a *restricted* one, so it needs Google's review (a demo video of the consent flow and of
+sending a merge, plus the privacy policy) but not a paid security assessment.
 
 ## Keeping up with Gmail
 

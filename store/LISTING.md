@@ -71,6 +71,18 @@ The extension's only function runs in Gmail: it reads the draft being sent to fi
 Saves the user's most recent EasyMerge email (subject and body, with its wildcards unfilled) in chrome.storage.local, so the compose-toolbar button can reinsert it into a new draft. Only one email is kept, it never leaves the device, and it is deleted when the extension is removed.
 ```
 
+`identity`:
+
+```text
+Shows Google's OAuth sign-in and consent window (chrome.identity.launchWebAuthFlow) so the user can let EasyMerge send their merged emails through the Gmail API. The token is kept in session storage only.
+```
+
+Host permissions `https://gmail.googleapis.com/*` and `https://oauth2.googleapis.com/*`:
+
+```text
+gmail.googleapis.com: sends each recipient's copy of a merged email with the Gmail API (users.messages.send, gmail.send scope only). oauth2.googleapis.com: reads the signed-in account's address from the token, to make sure it matches the Gmail tab before sending anything.
+```
+
 `scripting`:
 
 ```text
@@ -88,9 +100,10 @@ if only locally. Check:
 - [x] **Personal communications**: the draft's subject and body, read to find and fill wildcards. The last
       EasyMerge email is also stored locally (unfilled) for the reinsert button.
 - [x] **Website content**: the Gmail compose window.
+- [x] **Authentication information**: the Google OAuth access token for sending through the Gmail API,
+      kept in session storage only.
 
-Leave everything else unchecked (health, financial, authentication, location, web history, user
-activity).
+Leave everything else unchecked (health, financial, location, web history, user activity).
 
 **Certifications** (check all three):
 
