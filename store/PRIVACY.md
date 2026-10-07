@@ -1,20 +1,24 @@
 # EasyMerge Privacy Policy
 
-_Last updated: October 2, 2026_
+_Last updated: October 7, 2026_
 
 EasyMerge is a Chrome extension for Gmail. When you click Send, it checks your draft for wildcards
 like `_FIRST_NAME` and, if it finds any, shows a dialog so you can fill them in before the message goes out.
+If the draft has several recipients, each one gets a separate copy with their own values.
 
 ## What EasyMerge reads
 
 To do that, EasyMerge reads the following from the Gmail compose window you are sending from:
 
 - the subject and body of the draft, to find wildcards and replace them with your values;
-- the names and email addresses of the "To" recipients, to suggest a name and company.
+- the names and email addresses of the "To" recipients, to suggest a name and company;
+- the "Cc" and "Bcc" recipients and the "From" address, so each separate copy of a multi-recipient email
+  goes from the same address with the same Cc and Bcc.
 
 ## What EasyMerge does with it
 
-All of this happens inside your browser, in the Gmail tab.
+All of this happens inside your browser, in the Gmail tab. Separate copies are sent the same way you
+send any email: EasyMerge opens a Gmail compose window for each one, fills it in, and clicks Send.
 
 - EasyMerge does **not** send your email content, recipients, or the values you type to the developer
   or to any server. The developer has no server and receives none of your data.
