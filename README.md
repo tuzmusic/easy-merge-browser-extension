@@ -80,8 +80,9 @@ Without an app ID, `npm run dev` loads but InboxSDK won't initialize, and `npm r
 - Two or more `To` recipients turn the dialog into a table: one row per recipient, one column per
   wildcard, each row autofilled from its own recipient. "↓ all" copies a column's value to the empty
   cells (not offered for names and companies). × drops a recipient.
-- Send opens a new Gmail compose window per row, fills it, and sends it, one after another, behind the
-  dialog. The original draft is discarded once everyone has been sent their copy.
+- Send opens a new Gmail compose window per row, fills it, and sends it, one after another, hidden
+  behind the dialog. The last recipient's copy is sent from the original draft itself, once everyone
+  else's has gone out.
 - Cc and Bcc go on every email, and the From address (send-as alias) is kept.
 - Stop, or a failure, ends the run. The draft stays open, addressed to whoever didn't get it yet, and
   Send picks up where it left off with the values you typed.

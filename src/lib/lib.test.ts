@@ -199,6 +199,7 @@ describe('runMerge', () => {
 function fakeCompose() {
   const listeners: Record<string, (() => void)[]> = {};
   const fields: Record<string, unknown> = {};
+  const body = document.createElement('div');
   const compose = {
     fields,
     emit: (event: string) => listeners[event]?.forEach((fn) => fn()),
@@ -208,7 +209,8 @@ function fakeCompose() {
     setBccRecipients: (v: string[]) => void (fields.bcc = v),
     setFromEmail: (v: string) => void (fields.from = v),
     setSubject: (v: string) => void (fields.subject = v),
-    setBodyHTML: (v: string) => void (fields.html = v),
+    setBodyHTML: (v: string) => void (fields.html = body.innerHTML = v),
+    getBodyElement: () => body,
     send: () => void (fields.sent = true),
   };
   return compose;
@@ -222,7 +224,8 @@ describe('sendOne', () => {
     const done = sendOne(compose, {
       ...message('j@x.com'), to: { emailAddress: 'j@x.com', name: 'Jane' }, cc: [{ emailAddress: 'c@x.com' }],
       from: { emailAddress: 'me@x.com', name: 'Me' },
-    });
+    }, 1000, 0);
+    await vi.waitFor(() => expect(compose.fields.sent).toBe(true));
     expect(compose.fields).toEqual({
       to: ['"Jane" <j@x.com>'], cc: ['c@x.com'], bcc: [], from: 'me@x.com', subject: 's', html: 'h', sent: true,
     });
@@ -231,15 +234,33 @@ describe('sendOne', () => {
   });
   it('fails when the send is canceled', async () => {
     const compose = fakeCompose();
-    const done = sendOne(compose, message('a'));
+    const done = sendOne(compose, message('a'), 1000, 0);
     compose.emit('sendCanceled');
     await expect(done).rejects.toThrow('canceled');
   });
   it('fails when Gmail never sends', async () => {
     vi.useFakeTimers();
-    const done = sendOne(fakeCompose(), message('a'), 1000);
-    vi.advanceTimersByTime(1000);
-    await expect(done).rejects.toThrow("didn't send");
+    const done = expect(sendOne(fakeCompose(), message('a'), 1000, 0)).rejects.toThrow("didn't send");
+    await vi.advanceTimersByTimeAsync(1000);
+    await done;
+  });
+  it('re-sets a body that Gmail wipes before sending it', async () => {
+    const compose = fakeCompose();
+    let wipes = 2;
+    const set = compose.setBodyHTML;
+    compose.setBodyHTML = (v) => set(wipes-- > 0 ? '' : v);
+    const done = sendOne(compose, message('a'), 1000, 0);
+    await vi.waitFor(() => expect(compose.fields.sent).toBe(true));
+    expect(compose.getBodyElement().innerHTML).toBe('h');
+    compose.emit('sending');
+    await expect(done).resolves.toBeUndefined();
+  });
+  it("doesn't send when the body never sticks", async () => {
+    const compose = fakeCompose();
+    const set = compose.setBodyHTML;
+    compose.setBodyHTML = () => set('');
+    await expect(sendOne(compose, message('a'), 1000, 0)).rejects.toThrow("didn't keep");
+    expect(compose.fields.sent).toBeUndefined();
   });
   it('opens a new compose per message', async () => {
     const opened: ReturnType<typeof fakeCompose>[] = [];

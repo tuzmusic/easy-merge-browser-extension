@@ -1,6 +1,6 @@
 import type { Recipient } from './autofill';
 import type { Template } from './template';
-import { fillHTML, replaceWildcardsInText } from './wildcards';
+import { fillHTML, replaceWildcardsInText, textOfElement } from './wildcards';
 
 /** One recipient of a merge and the values for their copy of the email. */
 export interface MergeRow {
@@ -112,14 +112,41 @@ export interface SendableCompose {
   setFromEmail(email: string): void;
   setSubject(text: string): void;
   setBodyHTML(html: string): void;
+  getBodyElement(): HTMLElement;
   send(): void;
   on(event: 'sending' | 'destroy' | 'sendCanceled', listener: () => void): unknown;
 }
 
 export const SEND_TIMEOUT_MS = 15_000;
+export const BODY_SETTLE_MS = 400;
+const BODY_ATTEMPTS = 5;
+
+const normalize = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * Set the body of a just-opened compose and wait until it sticks. Gmail is still setting the window up
+ * (it inserts the signature after opening) and can wipe or ignore a body set too early, which sends
+ * an empty email.
+ */
+async function setBody(compose: SendableCompose, html: string, settleMs: number): Promise<void> {
+  const probe = document.createElement('div');
+  probe.innerHTML = html;
+  const expected = normalize(textOfElement(probe));
+  for (let attempt = 0; attempt < BODY_ATTEMPTS; attempt++) {
+    // Replaces the whole body, Gmail's auto-inserted signature included; the template has its own.
+    compose.setBodyHTML(html);
+    // Let Gmail's editor know the body changed, as typing would.
+    compose.getBodyElement().dispatchEvent(new Event('input', { bubbles: true }));
+    await pause(settleMs);
+    if (normalize(textOfElement(compose.getBodyElement())) === expected) return;
+  }
+  throw new Error("Gmail didn't keep the email's body, so it wasn't sent.");
+}
 
 /** Fill a fresh compose window and send it. Resolves once Gmail starts sending. */
-export function sendOne(compose: SendableCompose, message: OutgoingMessage, timeoutMs = SEND_TIMEOUT_MS): Promise<void> {
+export function sendOne(
+  compose: SendableCompose, message: OutgoingMessage, timeoutMs = SEND_TIMEOUT_MS, settleMs = BODY_SETTLE_MS,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const settle = (error?: string) => {
@@ -135,26 +162,23 @@ export function sendOne(compose: SendableCompose, message: OutgoingMessage, time
     compose.on('destroy', () => settle());
     compose.on('sendCanceled', () => settle('The send was canceled.'));
 
-    try {
+    (async () => {
       compose.setToRecipients([formatAddress(message.to)]);
       compose.setCcRecipients(message.cc.map(formatAddress));
       compose.setBccRecipients(message.bcc.map(formatAddress));
       if (message.from) compose.setFromEmail(message.from.emailAddress);
       compose.setSubject(message.subject);
-      // Replaces the whole body, Gmail's auto-inserted signature included; the template has its own.
-      compose.setBodyHTML(message.html);
-      compose.send();
-    } catch (e) {
-      settle(e instanceof Error ? e.message : String(e));
-    }
+      await setBody(compose, message.html, settleMs);
+      if (!settled) compose.send();
+    })().catch((e) => settle(e instanceof Error ? e.message : String(e)));
   });
 }
 
-/** Sends each message from its own new Gmail compose window. */
-export function composeSender(openCompose: () => Promise<SendableCompose>): Sender {
+/** Sends each message from the compose window `composeFor` gives it (usually a new one). */
+export function composeSender(composeFor: (message: OutgoingMessage) => Promise<SendableCompose>): Sender {
   return {
     async send(message) {
-      await sendOne(await openCompose(), message);
+      await sendOne(await composeFor(message), message);
     },
   };
 }
