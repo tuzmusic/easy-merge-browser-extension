@@ -141,7 +141,7 @@ export function MergeDialog({
           <table>
             <thead>
               <tr>
-                <th class="who">To</th>
+                <th class="who">To (merge-compose branch)</th>
                 {wildcards.map((w) => {
                   const value = editing ? fillDownValue(w) : undefined;
                   return (
