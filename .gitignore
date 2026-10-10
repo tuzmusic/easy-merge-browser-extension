@@ -4,3 +4,4 @@ release
 .env
 .DS_Store
 public/pageWorld.js
+.idea
