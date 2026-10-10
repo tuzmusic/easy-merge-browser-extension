@@ -1,7 +1,8 @@
 // Gmail API side of merging: OAuth tokens per Gmail account, and `messages.send`. The content script
 // asks for these over chrome.runtime messages (see src/lib/gmailApi.ts).
 import {
-  authUrl, describeGmailError, isGmailRequest, parseAuthRedirect, type GmailRequest, type GmailResponse,
+  apiDisabledProblem, authUrl, describeGmailError, GmailSetupError, isGmailRequest, parseAuthRedirect,
+  type GmailRequest, type GmailResponse, type SetupContext,
 } from '../lib/gmailApi';
 
 const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID;
@@ -26,16 +27,23 @@ async function checkAccount(accessToken: string, account: string): Promise<void>
   const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
   const { email } = (await response.json()) as { email?: string };
   if (email?.toLowerCase() !== account.toLowerCase()) {
-    throw new Error(`Google signed in ${email ?? 'another account'}, but this Gmail tab is ${account}.`);
+    throw new GmailSetupError({ kind: 'wrongAccount', signedIn: email });
   }
 }
 
 async function signIn(account: string, interactive: boolean): Promise<string> {
-  if (!clientId) throw new Error('No Google OAuth client ID is configured.');
-  const redirect = await chrome.identity.launchWebAuthFlow({
-    url: authUrl({ clientId, redirectUri: chrome.identity.getRedirectURL(), account, interactive }),
-    interactive,
-  });
+  if (!clientId) throw new GmailSetupError({ kind: 'noClientId' });
+  if (!/\.apps\.googleusercontent\.com$/.test(clientId)) throw new GmailSetupError({ kind: 'badClientId' });
+  let redirect: string | undefined;
+  try {
+    redirect = await chrome.identity.launchWebAuthFlow({
+      url: authUrl({ clientId, redirectUri: chrome.identity.getRedirectURL(), account, interactive }),
+      interactive,
+    });
+  } catch (e) {
+    // Google's own error pages (bad client, redirect mismatch) never redirect, so Chrome only reports the window closing.
+    throw new GmailSetupError({ kind: 'signInFailed', detail: e instanceof Error ? e.message : String(e) });
+  }
   const { accessToken, expiresIn } = parseAuthRedirect(redirect);
   await checkAccount(accessToken, account);
   const stored: StoredToken = { accessToken, expiresAt: Date.now() + expiresIn * 1000 };
@@ -68,7 +76,11 @@ async function send(account: string, raw: string): Promise<void> {
     await chrome.storage.session.remove(tokenKey(account));
     response = await post(await getToken(account), raw);
   }
-  if (!response.ok) throw new Error(describeGmailError(response.status, await response.json().catch(() => undefined)));
+  if (!response.ok) {
+    const body = await response.json().catch(() => undefined);
+    const problem = apiDisabledProblem(response.status, body);
+    throw problem ? new GmailSetupError(problem) : new Error(describeGmailError(response.status, body));
+  }
 }
 
 async function handle(request: GmailRequest): Promise<void> {
@@ -76,11 +88,24 @@ async function handle(request: GmailRequest): Promise<void> {
   else await send(request.account, request.raw);
 }
 
+const setupContext = (account: string): SetupContext => ({
+  account,
+  clientId,
+  extensionId: chrome.runtime.id,
+  redirectUri: chrome.identity.getRedirectURL(),
+  keyPinned: 'key' in chrome.runtime.getManifest(),
+});
+
+const failure = (e: unknown, account: string): GmailResponse => {
+  if (e instanceof GmailSetupError) return { ok: false, error: e.message, problem: e.problem, context: setupContext(account) };
+  return { ok: false, error: e instanceof Error ? e.message : String(e) };
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!isGmailRequest(message) || sender.id !== chrome.runtime.id) return false;
   handle(message).then(
     () => sendResponse({ ok: true } satisfies GmailResponse),
-    (e) => sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) } satisfies GmailResponse),
+    (e) => sendResponse(failure(e, message.account)),
   );
   return true; // Responds asynchronously.
 });

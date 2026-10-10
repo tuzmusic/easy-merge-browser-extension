@@ -1,15 +1,15 @@
 import * as InboxSDK from '@inboxsdk/core';
 import { applyValues } from '../lib/apply';
 import { autofill, type Recipient } from '../lib/autofill';
-import { apiSender, authorize } from '../lib/gmailApi';
+import { apiSender, authorize, developerMessage, GmailSetupError } from '../lib/gmailApi';
 import { IgnoreList } from '../lib/guard';
 import {
-  buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sharedValues, uniqueRecipients,
+  buildMessage, formatAddress, hasAttachments, runMerge, sharedValues, uniqueRecipients,
   type Envelope, type Sender,
 } from '../lib/merge';
 import { getLastValues, rememberValues } from '../lib/memory';
 import { loadTemplate, saveTemplate, type Template } from '../lib/template';
-import { showDialog, showMergeDialog } from '../ui/mount';
+import { showDialog, showMergeDialog, showSetupError } from '../ui/mount';
 import { showPopover } from '../ui/Popover';
 import { isBlankDraft, textOfElement } from '../lib/wildcards';
 
@@ -27,14 +27,21 @@ let merging = false;
 // eventTracking off: InboxSDK's usage analytics are of no use to us, and off keeps the privacy policy simple.
 // InboxSDK still reports its own internal errors to its maintainers (disclosed in store/PRIVACY.md).
 InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, globalErrorLogging: false }).then((sdk) => {
-  // The Gmail API when it's set up and the user allows it (no compose windows, real errors); otherwise
-  // Gmail compose windows, which need nothing.
-  const pickSender = async (): Promise<{ sender: Sender; pauseMs?: number }> => {
+  // Setup problems get their own dialog (over the merge dialog, which still shows the one-line error).
+  const reportSetupErrors = (e: unknown) => {
+    if (e instanceof GmailSetupError) {
+      showSetupError({ summary: e.message, developerMessage: developerMessage(e.problem, e.context) });
+    }
+    throw e;
+  };
+
+  // Merges send only through the Gmail API. Authorizing first means a setup problem stops the merge
+  // before anything is sent.
+  const gmailSender = async (): Promise<Sender> => {
     const account = sdk.User.getEmailAddress();
-    const auth = await authorize(account);
-    if (auth.ok) return { sender: apiSender(account), pauseMs: 300 };
-    console.warn(`[EasyMerge] Not using the Gmail API (${auth.error}); sending through compose windows.`);
-    return { sender: composeSender(() => sdk.Compose.openNewComposeView()) };
+    await authorize(account).catch(reportSetupErrors);
+    const sender = apiSender(account);
+    return { send: (message) => sender.send(message).catch(reportSetupErrors) };
   };
 
   sdk.Compose.registerComposeViewHandler((compose) => {
@@ -119,7 +126,8 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
           try {
             return await runMerge({
               messages: rows.map((row) => buildMessage(template, envelope, row)),
-              ...(await pickSender()),
+              sender: await gmailSender(),
+              pauseMs: 300,
               report,
               shouldStop,
             });

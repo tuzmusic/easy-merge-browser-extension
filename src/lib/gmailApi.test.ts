@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiSender, authUrl, describeGmailError, parseAuthRedirect } from './gmailApi';
+import {
+  apiDisabledProblem, apiSender, authUrl, describeGmailError, developerMessage, GmailSetupError, parseAuthRedirect,
+  type SetupContext,
+} from './gmailApi';
 import type { OutgoingMessage } from './merge';
 import { base64Url, buildMime, encodeHeader, mimeAddress } from './mime';
 
@@ -71,7 +74,12 @@ describe('auth', () => {
     expect(parseAuthRedirect('https://abc.chromiumapp.org/#access_token=T&expires_in=3599&token_type=Bearer'))
       .toEqual({ accessToken: 'T', expiresIn: 3599 });
     expect(() => parseAuthRedirect('https://abc.chromiumapp.org/#error=access_denied')).toThrow('declined');
-    expect(() => parseAuthRedirect('https://abc.chromiumapp.org/#error=interaction_required')).toThrow('interaction_required');
+    try {
+      parseAuthRedirect('https://abc.chromiumapp.org/#error=interaction_required');
+    } catch (e) {
+      expect(e).toBeInstanceOf(GmailSetupError);
+      expect((e as GmailSetupError).problem).toEqual({ kind: 'oauthError', code: 'interaction_required' });
+    }
     expect(() => parseAuthRedirect(undefined)).toThrow('no token');
   });
 });
@@ -84,6 +92,43 @@ describe('describeGmailError', () => {
   it("passes Google's message through", () => {
     expect(describeGmailError(400, { error: { message: 'Invalid To header' } })).toBe('Invalid To header');
     expect(describeGmailError(500, undefined)).toBe('Gmail returned an error (500).');
+  });
+});
+
+describe('setup problems', () => {
+  const context: SetupContext = {
+    account: 'me@x.com',
+    clientId: '123.apps.googleusercontent.com',
+    extensionId: 'abc',
+    redirectUri: 'https://abc.chromiumapp.org/',
+    keyPinned: false,
+  };
+
+  it('names the missing environment variables', () => {
+    const message = developerMessage({ kind: 'noClientId' }, context);
+    expect(message).toMatch(/environment variables aren't present/);
+    expect(message).toContain('VITE_GOOGLE_OAUTH_CLIENT_ID=');
+    expect(message).toContain('https://abc.chromiumapp.org/');
+  });
+  it('points a failed sign-in at the client, redirect URI and unpinned ID', () => {
+    const message = developerMessage({ kind: 'signInFailed', detail: 'The user did not approve access.' }, context);
+    expect(message).toContain('The user did not approve access.');
+    expect(message).toContain('123.apps.googleusercontent.com');
+    expect(message).toContain('  https://abc.chromiumapp.org/');
+    expect(message).toMatch(/EXTENSION_PUBLIC_KEY is not set/);
+    expect(developerMessage({ kind: 'signInFailed', detail: 'x' }, { ...context, keyPinned: true })).not.toMatch(/EXTENSION_PUBLIC_KEY/);
+  });
+  it('recognizes the Gmail API being off', () => {
+    const body = {
+      error: {
+        message: 'Gmail API has not been used in project 42 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/gmail.googleapis.com/overview?project=42 then retry.',
+        errors: [{ reason: 'accessNotConfigured' }],
+      },
+    };
+    const problem = apiDisabledProblem(403, body);
+    expect(problem).toEqual({ kind: 'apiDisabled', activationUrl: 'https://console.developers.google.com/apis/api/gmail.googleapis.com/overview?project=42' });
+    expect(developerMessage(problem!)).toContain('overview?project=42');
+    expect(apiDisabledProblem(403, { error: { message: 'x', errors: [{ reason: 'dailyLimitExceeded' }] } })).toBeUndefined();
   });
 });
 
@@ -102,5 +147,10 @@ describe('apiSender', () => {
   it('throws the background error', async () => {
     vi.stubGlobal('chrome', { runtime: { sendMessage: vi.fn().mockResolvedValue({ ok: false, error: 'nope' }) } });
     await expect(apiSender('me@x.com').send(message)).rejects.toThrow('nope');
+  });
+  it('throws setup problems as GmailSetupError', async () => {
+    const response = { ok: false, error: 'x', problem: { kind: 'apiDisabled' } };
+    vi.stubGlobal('chrome', { runtime: { sendMessage: vi.fn().mockResolvedValue(response) } });
+    await expect(apiSender('me@x.com').send(message)).rejects.toBeInstanceOf(GmailSetupError);
   });
 });

@@ -2,6 +2,7 @@ import { render, type VNode } from 'preact';
 import type { MergeRow, RowStatus } from '../lib/merge';
 import { Dialog, dialogCss, type DialogProps } from './Dialog';
 import { MergeDialog, mergeDialogCss, type MergeDialogProps } from './MergeDialog';
+import { SetupErrorDialog, setupErrorDialogCss, type SetupErrorDialogProps } from './SetupErrorDialog';
 
 /** Render into a shadow root (so Gmail's CSS can't touch it). Returns a function that removes it. */
 function mountInShadow(css: string, vnode: VNode): () => void {
@@ -54,6 +55,22 @@ export function showMergeDialog(props: Omit<MergeDialogProps, 'onDone' | 'onSend
         onDone={(rows, statuses) => done({ action: 'merged', rows, statuses })}
         onSendAnyway={() => done({ action: 'sendAnyway' })}
         onCancel={() => done({ action: 'cancel' })}
+      />,
+    );
+  });
+}
+
+/** Mounted last, so it sits above a merge dialog that's still open. Resolves when it's closed. */
+export function showSetupError(props: Omit<SetupErrorDialogProps, 'onClose'>) {
+  return new Promise<void>((resolve) => {
+    const unmount = mountInShadow(
+      dialogCss + setupErrorDialogCss,
+      <SetupErrorDialog
+        {...props}
+        onClose={() => {
+          unmount();
+          resolve();
+        }}
       />,
     );
   });

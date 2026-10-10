@@ -14,8 +14,9 @@ script at build time from `.env`, so it ships inside the zip.
 
 ## Gmail API setup
 
-Merges send through the Gmail API when `VITE_GOOGLE_OAUTH_CLIENT_ID` is set, and through Gmail compose
-windows when it isn't (or when the user declines access). The client ID is public too; it ships in the zip.
+Merges send through the Gmail API, with no compose-window fallback: if the API isn't set up (or the user
+declines access), sending a merge shows an error dialog whose "Developer message" says what to fix. The
+client ID is public too; it ships in the zip.
 
 1. Pin the extension ID. In the Web Store dashboard, open the item's **Package** tab and copy the public
    key into `.env` as `EXTENSION_PUBLIC_KEY`, so unpacked builds get the store item's ID. Rebuild, and
