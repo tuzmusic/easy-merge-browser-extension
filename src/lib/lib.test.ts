@@ -5,7 +5,7 @@ import {
 } from './autofill';
 import { IgnoreList } from './guard';
 import {
-  buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sendOne, sharedValues, uniqueRecipients,
+  attachFiles, buildMessage, composeSender, formatAddress, readAttachments, runMerge, sendOne, sharedValues, uniqueRecipients,
   type OutgoingMessage, type RowStatus, type Sender,
 } from './merge';
 import {
@@ -151,11 +151,50 @@ describe('merge helpers', () => {
       .toEqual({ _MONTH: 'May' });
     expect(sharedValues([])).toEqual({});
   });
-  it('detects attachments', () => {
-    const el = document.createElement('div');
-    expect(hasAttachments(el)).toBe(false);
-    el.innerHTML = '<input type="hidden" name="attach" value="x">';
-    expect(hasAttachments(el)).toBe(true);
+});
+
+/** A compose element with Gmail's attachment chips: an `attach` input and a download link each. */
+function composeWithAttachments(...names: string[]) {
+  const el = document.createElement('div');
+  el.innerHTML = '<input type="file" name="Filedata" multiple>' + names.map((name, i) =>
+    `<input type="${i % 2 ? 'checkbox' : 'hidden'}" name="attach" checked><a href="https://mail.google.com/mail/u/0/?view=att&attid=${i}">` +
+    `<div class="vI">${name}</div> (1K)</a>`).join('');
+  return el;
+}
+
+describe('attachments', () => {
+  const fetchFile = (async (url: string) => new Response(new Blob([`file ${url.slice(-1)}`], { type: 'text/plain' }))) as typeof fetch;
+
+  it('downloads the draft\'s attachments', async () => {
+    const files = await readAttachments(composeWithAttachments('a.txt', 'b.txt'), fetchFile);
+    expect(files.map((f) => f.name)).toEqual(['a.txt', 'b.txt']);
+    expect(await files[1].text()).toBe('file 1');
+    expect(files[0].type).toBe('text/plain');
+  });
+  it('reads none from a draft without attachments', async () => {
+    expect(await readAttachments(document.createElement('div'), fetchFile)).toEqual([]);
+  });
+  it('refuses when an attachment has no download link yet', async () => {
+    const el = composeWithAttachments('a.txt');
+    el.querySelector('a')!.remove();
+    await expect(readAttachments(el, fetchFile)).rejects.toThrow("Couldn't read");
+  });
+  it('refuses when a download fails', async () => {
+    const failing = (async () => new Response('', { status: 404 })) as typeof fetch;
+    await expect(readAttachments(composeWithAttachments('a.txt'), failing)).rejects.toThrow('a.txt');
+  });
+  it('attaches through the file input and waits for the uploads', async () => {
+    const el = composeWithAttachments();
+    const input = el.querySelector('input')!;
+    input.addEventListener('change', () => {
+      // Gmail adds a chip with a download link once each upload finishes.
+      setTimeout(() => [...input.files!].forEach((f) => el.append(composeWithAttachments(f.name))), 300);
+    });
+    await attachFiles(el, [new File(['x'], 'a.txt')], 5000);
+    expect(el.querySelectorAll('a').length).toBe(1);
+  });
+  it('gives up when the uploads never finish', async () => {
+    await expect(attachFiles(composeWithAttachments(), [new File(['x'], 'a.txt')], 0)).rejects.toThrow('uploading');
   });
 });
 
@@ -211,6 +250,7 @@ function fakeCompose() {
     setSubject: (v: string) => void (fields.subject = v),
     setBodyHTML: (v: string) => void (fields.html = body.innerHTML = v),
     getBodyElement: () => body,
+    getElement: () => body,
     send: () => void (fields.sent = true),
   };
   return compose;

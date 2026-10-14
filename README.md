@@ -88,7 +88,8 @@ Without an app ID, `npm run dev` loads but InboxSDK won't initialize, and `npm r
   Send picks up where it left off with the values you typed.
 - "Send anyway" asks first, then sends the original single email to everyone, wildcards unfilled.
 - Not split: replies and forwards (threading, forwarded attachments). They fill in place as before.
-- Drafts with attachments can't be merged yet (they can't be copied to the new emails).
+- Attachments go on every email: the draft's files are downloaded and uploaded again to each copy
+  before it's sent. Inline images aren't copied yet.
 - Gmail's daily sending limits apply (about 500 recipients a day for personal accounts).
 
 ## Publishing

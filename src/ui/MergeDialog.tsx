@@ -77,7 +77,7 @@ export function MergeDialog({
   const [showsPill] = useState(() => reusableCount > 1);
 
   const complete = rows.every((row) => wildcards.every((w) => !isEmpty(row, w)));
-  const canSend = complete && !hasAttachments;
+  const canSend = complete;
   // Focus lands here on open; the first cell when everything is already filled, so Enter sends.
   const firstEmptyCell = (() => {
     for (const [i, row] of rows.entries()) {
@@ -202,10 +202,8 @@ export function MergeDialog({
           </button>
         )}
 
-        {editing && hasAttachments && (
-          <p class="warn">Attachments can't be copied to separate emails yet. Remove them or use Send anyway.</p>
-        )}
         {editing && hasCopies && <p class="note">Cc and Bcc recipients get a copy of every email.</p>}
+        {editing && hasAttachments && <p class="note">Every email gets the attachments.</p>}
 
         {phase === 'edit' && (
           <footer>
@@ -292,8 +290,7 @@ export const mergeDialogCss = `
   .status.sent { color: #188038; }
   .status.failed { color: #d93025; }
 
-  .note, .warn, .progress { margin: 0; font-size: 12px; color: #5f6368; }
-  .warn { padding: 8px 10px; border-radius: 6px; background: #fef7e0; color: #7a4f01; }
+  .note, .progress { margin: 0; font-size: 12px; color: #5f6368; }
   .progress { flex: 1; align-self: center; font-size: 13px; color: #3c4043; }
   .progress.ok { color: #188038; }
   .error { color: #d93025; }

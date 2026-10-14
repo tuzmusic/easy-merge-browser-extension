@@ -4,7 +4,7 @@ import { autofill, type Recipient } from '../lib/autofill';
 import { IgnoreList } from '../lib/guard';
 import { hideCompose } from '../lib/hide';
 import {
-  buildMessage, composeSender, formatAddress, hasAttachments, runMerge, sharedValues, uniqueRecipients,
+  attachmentCount, buildMessage, composeSender, formatAddress, readAttachments, runMerge, sharedValues, uniqueRecipients,
   type Envelope
 } from '../lib/merge';
 import { getLastValues, rememberValues } from '../lib/memory';
@@ -109,12 +109,16 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
         })),
         lastValues: getLastValues(),
         hasCopies: envelope.cc.length + envelope.bcc.length > 0,
-        hasAttachments: hasAttachments(compose.getElement()),
+        hasAttachments: attachmentCount(compose.getElement()) > 0,
         run: async (rows, report, shouldStop) => {
-          const messages = rows.map((row) => buildMessage(template, envelope, row));
+          // Read before anything is sent, so a file we can't copy stops the whole merge.
+          const attachments = await readAttachments(compose.getElement());
+          const messages = rows.map((row) => buildMessage(template, { ...envelope, attachments }, row));
           // The last email goes out from this draft rather than a new window, once all the others have.
           // That leaves no draft to discard, and if anything fails first, the draft is still here.
-          const fromDraft = messages.at(-1);
+          // It already has the attachments.
+          const fromDraft = { ...messages.pop()!, attachments: [] };
+          messages.push(fromDraft);
           merging = true;
           // Gmail hides a draft while it sends; do the same until we know whether it's needed again.
           showDraft = hideCompose(compose.getElement());
