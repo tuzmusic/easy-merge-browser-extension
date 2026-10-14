@@ -22,11 +22,9 @@ Mail merge without the spreadsheet. Type wildcards like _FIRST_NAME in any Gmail
 ```text
 Mail merge, minus the mail merge.
 
-Write your email the way you always do. Type wildcards directly in the email: _FIRST_NAME, _COMPANY, _ETC. Anything in all caps that starts with an underscore is a wildcard. When you hit Send, EasyMerge asks for values for each wildcard, and sends the filled-in email.
+Write your email the way you always do, with everyone in the To field. Type wildcards directly in the email: _FIRST_NAME, _COMPANY, _ETC. Anything in all caps that starts with an underscore is a wildcard. When you hit Send, EasyMerge shows a row for each recipient, fills in what it can, and asks you for the rest. Then each person gets their own email, attachments included.
 
 That's it. Really.
-
-Sending to several people? Put them all in the To field. EasyMerge shows one row per recipient, fills in what it can, and sends each person their own copy.
 
 Want to send it again later? Open a new message and click the EasyMerge button in the compose toolbar. Your last EasyMerge email comes back with its wildcards intact.
 
@@ -85,7 +83,8 @@ if only locally. Check:
 
 - [x] **Personally identifiable information**: recipient names and email addresses (To, Cc, Bcc, From),
       read from the draft to autofill name and company and to address each separate copy.
-- [x] **Personal communications**: the draft's subject and body, read to find and fill wildcards. The last
+- [x] **Personal communications**: the draft's subject and body, read to find and fill wildcards, and its
+      attachments, downloaded from Gmail in the tab to attach to each separate copy. The last
       EasyMerge email is also stored locally (unfilled) for the reinsert button.
 - [x] **Website content**: the Gmail compose window.
 
