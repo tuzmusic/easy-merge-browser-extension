@@ -4,7 +4,8 @@
    upload whose version isn't higher than the last one.
 2. `npm run release` typechecks, tests, builds, and writes `release/easymerge-<version>.zip`. A build
    fails if `VITE_INBOXSDK_APP_ID` is missing from `.env`.
-3. Upload the zip in the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), update
+3. Add the new version to [CHANGELOG.md](CHANGELOG.md) (plain language, for users, not commit messages).
+4. Upload the zip in the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), update
    the listing from [LISTING.md](LISTING.md) if anything changed, and submit for review.
 
 ## The InboxSDK app ID

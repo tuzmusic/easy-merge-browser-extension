@@ -26,7 +26,7 @@ Write your email the way you always do, with everyone in the To field. Type wild
 
 That's it. Really.
 
-Want to send it again later? Open a new message and click the EasyMerge button in the compose toolbar. Your last EasyMerge email comes back with its wildcards intact.
+Want to send it again later? Open a new message and click the EasyMerge button in the compose toolbar. Your last EasyMerge email comes back with its wildcards intact. Keep the subject you've already typed by unchecking "Include subject", and press Cmd+Z if you replace a draft by mistake.
 
 Private by design. Everything happens in your Gmail tab. EasyMerge has no server and never sends your email content anywhere.
 ```
