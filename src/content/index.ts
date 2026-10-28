@@ -8,7 +8,8 @@ import {
   type Envelope
 } from '../lib/merge';
 import { getLastValues, rememberValues } from '../lib/memory';
-import { loadTemplate, saveTemplate, type Template } from '../lib/template';
+import { loadIncludeSubject, loadTemplate, saveIncludeSubject, saveTemplate, type Template } from '../lib/template';
+import { UndoSlot } from '../lib/undo';
 import { showDialog, showMergeDialog } from '../ui/mount';
 import { showPopover } from '../ui/Popover';
 import { isBlankDraft, textOfElement } from '../lib/wildcards';
@@ -37,6 +38,12 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
     // The draft as it was before wildcards were filled; saved as the template once the send goes through.
     let unfilled: Template | undefined;
 
+    // The draft as it was before the button replaced it, restored by Cmd+Z or the popover's Undo.
+    const beforeInsert = new UndoSlot<Template>(compose.getElement(), (saved) => {
+      compose.setSubject(saved.subject);
+      compose.setBodyHTML(saved.html);
+    });
+
     compose.addButton({
       title: 'Insert last EasyMerge email',
       iconUrl: chrome.runtime.getURL('icons/icon-32.png'),
@@ -46,18 +53,33 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
         if (!dropdown) return;
         // Hidden until we know whether there's anything to ask, so a straight insert doesn't flash it.
         dropdown.el.style.visibility = 'hidden';
-        const template = await loadTemplate();
-        const insert = () => {
+        const [template, includeSubject] = await Promise.all([loadTemplate(), loadIncludeSubject()]);
+        const insert = (withSubject: boolean) => {
           dropdown.close();
-          compose.setSubject(template!.subject);
+          beforeInsert.save({ subject: compose.getSubject(), html: compose.getHTMLContent() });
+          if (withSubject) compose.setSubject(template!.subject);
           compose.setBodyHTML(template!.html);
         };
         const close = () => dropdown.close();
+        const onUndo = beforeInsert.canUndo ? () => {
+          dropdown.close();
+          beforeInsert.undo();
+        } : undefined;
 
-        if (template && isBlankDraft(compose.getSubject(), compose.getBodyElement())) return insert();
+        // A blank draft has no subject to keep, so it always gets the template's.
+        if (template && isBlankDraft(compose.getSubject(), compose.getBodyElement())) return insert(true);
         showPopover(dropdown.el, template
-          ? { message: 'Replace this draft with your last EasyMerge email?', onConfirm: insert, onClose: close }
-          : { message: 'No EasyMerge email sent yet.', onClose: close });
+          ? {
+            message: 'Replace this draft with your last EasyMerge email?',
+            includeSubject,
+            onConfirm: (withSubject) => {
+              saveIncludeSubject(withSubject);
+              insert(withSubject);
+            },
+            onUndo,
+            onClose: close
+          }
+          : { message: 'No EasyMerge email sent yet.', onUndo, onClose: close });
         dropdown.el.style.visibility = '';
       }
     });

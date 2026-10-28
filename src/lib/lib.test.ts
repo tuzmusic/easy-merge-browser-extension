@@ -4,6 +4,7 @@ import {
   autofill, companyFromEmail, firstNameFromRecipient, fullNameFromRecipient, lastNameFromRecipient,
 } from './autofill';
 import { IgnoreList } from './guard';
+import { UndoSlot } from './undo';
 import {
   attachFiles, buildMessage, composeSender, formatAddress, readAttachments, runMerge, sendOne, sharedValues, uniqueRecipients,
   type OutgoingMessage, type RowStatus, type Sender,
@@ -313,5 +314,50 @@ describe('sendOne', () => {
     await sender.send(message('a'));
     await sender.send(message('b'));
     expect(opened.map((c) => c.fields.to)).toEqual([['a'], ['b']]);
+  });
+});
+
+describe('UndoSlot', () => {
+  const setup = () => {
+    const element = document.createElement('div');
+    const restored: string[] = [];
+    const slot = new UndoSlot<string>(element, (saved) => restored.push(saved));
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { key: 'z', cancelable: true, bubbles: true, ...init });
+      element.dispatchEvent(event);
+      return event;
+    };
+    return { element, restored, slot, press };
+  };
+
+  it('restores the saved value once on Cmd+Z or Ctrl+Z', () => {
+    const { restored, slot, press } = setup();
+    slot.save('before');
+    expect(press({ metaKey: true }).defaultPrevented).toBe(true);
+    expect(restored).toEqual(['before']);
+    expect(slot.canUndo).toBe(false);
+    expect(press({ ctrlKey: true }).defaultPrevented).toBe(false);
+    slot.save('again');
+    press({ ctrlKey: true });
+    expect(restored).toEqual(['before', 'again']);
+  });
+  it('leaves other keys and redo alone', () => {
+    const { restored, slot, press } = setup();
+    slot.save('before');
+    expect(press({ metaKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(press({ key: 'z' }).defaultPrevented).toBe(false);
+    expect(restored).toEqual([]);
+    expect(slot.canUndo).toBe(true);
+  });
+  it('does nothing with nothing saved', () => {
+    const { restored, press } = setup();
+    expect(press({ metaKey: true }).defaultPrevented).toBe(false);
+    expect(restored).toEqual([]);
+  });
+  it('ignores synthetic input events, like the ones InboxSDK fakes to save the draft', () => {
+    const { element, slot } = setup();
+    slot.save('before');
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(slot.canUndo).toBe(true);
   });
 });
