@@ -6,11 +6,12 @@ export interface DialogProps {
   autofilled: Record<string, string>;
   lastValues: Record<string, string>;
   onSend(values: Record<string, string>): void;
+  onFill(values: Record<string, string>): void;
   onSendAnyway(): void;
   onCancel(): void;
 }
 
-export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway, onCancel }: DialogProps) {
+export function Dialog({ wildcards, autofilled, lastValues, onSend, onFill, onSendAnyway, onCancel }: DialogProps) {
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...autofilled }));
   const firstEmpty = useRef<HTMLInputElement>(null);
   useEffect(() => firstEmpty.current?.focus(), []);
@@ -65,6 +66,7 @@ export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway
         <footer>
           <button type="button" class="ghost" onClick={onCancel}>Cancel</button>
           <button type="button" class="ghost" onClick={onSendAnyway}>Send anyway</button>
+          <button type="button" class="ghost" disabled={!complete} onClick={() => complete && onFill(values)}>Fill</button>
           <button type="submit" class="primary" disabled={!complete}>Fill &amp; send</button>
         </footer>
       </form>
@@ -99,7 +101,7 @@ export const dialogCss = `
     border: 1px solid transparent; }
   .ghost { background: none; border-color: #dadce0; color: #3c4043; white-space: nowrap; }
   .primary { background: #1a73e8; color: #fff; }
-  .primary:disabled { opacity: .5; cursor: not-allowed; }
+  .primary:disabled, .ghost:disabled { opacity: .5; cursor: not-allowed; }
   .reuse { align-self: flex-end; margin-bottom: -4px; padding: 4px 10px; border-radius: 999px;
     background: #e8f0fe; color: #1967d2; font-size: 12px; font-weight: 500; }
   .reuse:hover { background: #d2e3fc; }

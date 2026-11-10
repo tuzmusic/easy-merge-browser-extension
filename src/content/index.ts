@@ -72,7 +72,7 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
       compose.send();
     };
 
-    // One recipient (or a reply/forward): fill this draft in place and send it.
+    // One recipient (or a reply/forward): fill this draft in place and send it (or just fill it).
     const fillAndSend = (wildcards: string[], recipients: Recipient[]) => {
       showDialog({
         wildcards,
@@ -84,6 +84,8 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
         if (result.action === 'sendAnyway') return sendAnyway(wildcards);
         rememberValues(result.values);
         applyValues(compose, result.values);
+        // Nothing may ever be sent from here, so save the template now rather than on 'sent'.
+        if (result.action === 'fill') return saveTemplate(unfilled);
         sendingNow = true;
         compose.send();
       });

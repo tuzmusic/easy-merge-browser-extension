@@ -48,7 +48,7 @@ async function shoot(scene, [w, h], file) {
 
 try {
   await shoot('template', [1280, 800], join(out, 'screenshot-1-template.png'));
-  await shoot('fill', [1280, 800], join(out, 'screenshot-2-fill.png'));
+  await shoot('merge', [1280, 800], join(out, 'screenshot-2-merge.png'));
   await shoot('reuse', [1280, 800], join(out, 'screenshot-3-reuse.png'));
   for (const variant of ['', '-highlighter', '-poster', '-rows', '-form']) {
     await shoot(`promo${variant}`, [440, 280], join(out, `promo-small${variant}-440x280.png`));

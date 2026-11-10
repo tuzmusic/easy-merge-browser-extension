@@ -36,7 +36,7 @@ Private by design. Everything happens in your Gmail tab. EasyMerge has no server
 - Store icon 128×128: `public/icons/icon-128.png` (96px artwork + 16px transparent padding, per store spec)
 - Screenshots 1280×800, upload in this order:
   1. `screenshot-1-template.png`: your draft is the template, next to the email it became
-  2. `screenshot-2-fill.png`: Send opens the dialog; first name and company autofilled
+  2. `screenshot-2-merge.png`: Send opens a row per recipient; names and companies autofilled
   3. `screenshot-3-reuse.png`: last time's values offered in each field, plus "Fill 2 previous values"
 - Small promo tile 440×280: `promo-small-440x280.png` (or one of the `promo-small-*` options)
 

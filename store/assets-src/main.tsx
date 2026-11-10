@@ -4,12 +4,14 @@
 // Pick a scene with ?scene=<name>; render.mjs captures each at its exact store size.
 import { render } from 'preact';
 import { Dialog, dialogCss } from '../../src/ui/Dialog';
+import { MergeDialog, mergeDialogCss } from '../../src/ui/MergeDialog';
 import { autofill, type Recipient } from '../../src/lib/autofill';
 import iconUrl from '../../public/icons/icon.svg';
 import composeIconUrl from '../../public/icons/icon-32.png';
 
 const priya: Recipient = { name: 'Priya Raman', emailAddress: 'priya.raman@northwind.io' };
 const marcus: Recipient = { name: 'Marcus Chen', emailAddress: 'marcus.chen@contoso.com' };
+const dana: Recipient = { name: 'Dana Okafor', emailAddress: 'dana.okafor@fabrikam.com' };
 
 const SUBJECT = '_ROLE at _COMPANY';
 const BODY = [
@@ -41,7 +43,7 @@ const Icon = ({ d }: { d: string }) => (
   <svg class="tool" viewBox="0 0 24 24"><path d={d} /></svg>
 );
 
-function Compose({ to }: { to: Recipient }) {
+function Compose({ to }: { to: Recipient | Recipient[] }) {
   return (
     <div class="compose">
       <div class="compose-bar">
@@ -50,7 +52,7 @@ function Compose({ to }: { to: Recipient }) {
       </div>
       <div class="row">
         <span class="label">To</span>
-        <span class="chip"><span class="avatar" />{to.emailAddress}<span class="x">✕</span></span>
+        {[to].flat().map((r) => <span class="chip"><span class="avatar" />{r.emailAddress}<span class="x">✕</span></span>)}
         <span class="ccbcc">Cc Bcc</span>
       </div>
       <div class="row">{SUBJECT}</div>
@@ -89,6 +91,39 @@ function DialogLayer({ to, lastValues }: { to: Recipient; lastValues: Record<str
             autofilled={autofill(WILDCARDS, [to])}
             lastValues={lastValues}
             onSend={noop}
+            onSendAnyway={noop}
+            onCancel={noop}
+          />,
+          mount,
+        );
+      }}
+    />
+  );
+}
+
+/** The real merge dialog, one row per recipient, partway through being filled in. */
+function MergeDialogLayer({ to, typed }: { to: Recipient[]; typed: Record<string, string>[] }) {
+  return (
+    <div
+      class="dialog-layer"
+      ref={(host) => {
+        if (!host || host.shadowRoot) return;
+        const shadow = host.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        style.textContent = dialogCss + mergeDialogCss;
+        const mount = document.createElement('div');
+        shadow.append(style, mount);
+        render(
+          <MergeDialog
+            wildcards={WILDCARDS}
+            initialRows={to.map((recipient, i) => ({
+              recipient, values: { ...autofill(WILDCARDS, [recipient]), ...typed[i] },
+            }))}
+            lastValues={{}}
+            hasCopies={false}
+            hasAttachments={false}
+            run={async () => []}
+            onDone={noop}
             onSendAnyway={noop}
             onCancel={noop}
           />,
@@ -149,6 +184,20 @@ const scenes: Record<string, () => preact.JSX.Element> = {
       <div class="window">
         <Compose to={priya} />
         <DialogLayer to={priya} lastValues={{}} />
+      </div>
+    </Shot>
+  ),
+  merge: () => (
+    <Shot
+      title="Send it to everyone, each with their own values"
+      sub="Put everyone in the To field. Names and companies are filled in for you; type the rest, or use one value for all."
+    >
+      <div class="window wide">
+        <Compose to={[priya, marcus, dana]} />
+        <MergeDialogLayer
+          to={[priya, marcus, dana]}
+          typed={[{ _ROLE: 'Front-End Lead', _PORTFOLIO: 'samlee.dev/work' }, { _ROLE: 'Design Engineer' }, {}]}
+        />
       </div>
     </Shot>
   ),
@@ -218,7 +267,7 @@ render(scenes[scene](), document.getElementById('root')!);
 const css = document.createElement('style');
 css.textContent = `
   html, body { margin: 0; background: #f8fafd; font-family: system-ui, sans-serif; color: #202124; -webkit-font-smoothing: antialiased; }
-  html[data-scene="fill"], html[data-scene="template"], html[data-scene="reuse"] { width: 1280px; height: 800px; }
+  html[data-scene="fill"], html[data-scene="template"], html[data-scene="reuse"], html[data-scene="merge"] { width: 1280px; height: 800px; }
   html[data-scene^="promo"] { width: 440px; height: 280px; }
   html[data-scene^="icon"], html[data-scene^="icon"] body { background: transparent; }
   .icon { display: block; width: 100vw; height: 100vh; box-sizing: border-box; }
@@ -236,6 +285,7 @@ css.textContent = `
      so the dim covers the compose window rather than the whole slide. */
   .window { position: relative; width: 940px; transform: translateZ(0); border-radius: 12px;
     overflow: hidden; box-shadow: 0 12px 40px rgba(60,64,67,.18), 0 2px 6px rgba(60,64,67,.12); display: flex; }
+  .window.wide { width: 1152px; }
   .window.narrow { width: 620px; flex: none; }
 
   /* Modeled on Gmail's maximized compose window. */

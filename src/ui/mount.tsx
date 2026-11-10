@@ -19,9 +19,11 @@ function mountInShadow(css: string, vnode: VNode): () => void {
   };
 }
 
-export function showDialog(props: Omit<DialogProps, 'onSend' | 'onSendAnyway' | 'onCancel'>) {
+export function showDialog(props: Omit<DialogProps, 'onSend' | 'onFill' | 'onSendAnyway' | 'onCancel'>) {
   return new Promise<
-    { action: 'send'; values: Record<string, string> } | { action: 'sendAnyway' } | { action: 'cancel' }
+    | { action: 'send' | 'fill'; values: Record<string, string> }
+    | { action: 'sendAnyway' }
+    | { action: 'cancel' }
   >((resolve) => {
     const done = (result: Parameters<typeof resolve>[0]) => {
       unmount();
@@ -32,6 +34,7 @@ export function showDialog(props: Omit<DialogProps, 'onSend' | 'onSendAnyway' | 
       <Dialog
         {...props}
         onSend={(values) => done({ action: 'send', values })}
+        onFill={(values) => done({ action: 'fill', values })}
         onSendAnyway={() => done({ action: 'sendAnyway' })}
         onCancel={() => done({ action: 'cancel' })}
       />,
