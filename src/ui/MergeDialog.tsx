@@ -5,6 +5,8 @@ import { WildcardInput } from './WildcardInput';
 
 export interface MergeDialogProps {
   wildcards: string[];
+  /** Wildcards only used inside `[[...]]` sections; blank just drops the section. */
+  optional: string[];
   /** One per recipient, prefilled with what we could autofill or what was typed last time. */
   initialRows: MergeRow[];
   lastValues: Record<string, string>;
@@ -29,7 +31,7 @@ const STATUS_ICON: Record<RowStatus, string> = { queued: '○', sending: '', sen
 const SUCCESS_LINGER_MS = 1500;
 
 export function MergeDialog({
-  wildcards, initialRows, lastValues, hasCopies, hasAttachments, run, onDone, onSendAnyway, onCancel,
+  wildcards, optional, initialRows, lastValues, hasCopies, hasAttachments, run, onDone, onSendAnyway, onCancel,
 }: MergeDialogProps) {
   const [rows, setRows] = useState(initialRows);
   const [phase, setPhase] = useState<Phase>('edit');
@@ -76,12 +78,13 @@ export function MergeDialog({
   // Decided once, as in the single dialog: keep the pill's space after it's used so nothing jumps.
   const [showsPill] = useState(() => reusableCount > 1);
 
-  const complete = rows.every((row) => wildcards.every((w) => !isEmpty(row, w)));
+  const required = wildcards.filter((w) => !optional.includes(w));
+  const complete = rows.every((row) => required.every((w) => !isEmpty(row, w)));
   const canSend = complete;
   // Focus lands here on open; the first cell when everything is already filled, so Enter sends.
   const firstEmptyCell = (() => {
     for (const [i, row] of rows.entries()) {
-      const w = wildcards.find((w) => isEmpty(row, w));
+      const w = required.find((w) => isEmpty(row, w));
       if (w) return `${i}:${w}`;
     }
     return `0:${wildcards[0]}`;
@@ -147,6 +150,7 @@ export function MergeDialog({
                   return (
                     <th key={w}>
                       <span class="name">{w}</span>
+                      {optional.includes(w) && <span class="optional"> optional</span>}
                       {value && (
                         <button type="button" class="fill-down" title={`Use “${value}” for everyone`} onClick={() => fillDown(w, value)}>
                           ↓ all

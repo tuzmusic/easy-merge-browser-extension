@@ -3,6 +3,8 @@ import { WildcardInput } from './WildcardInput';
 
 export interface DialogProps {
   wildcards: string[];
+  /** Wildcards only used inside `[[...]]` sections; blank just drops the section. */
+  optional: string[];
   autofilled: Record<string, string>;
   lastValues: Record<string, string>;
   onSend(values: Record<string, string>): void;
@@ -10,7 +12,7 @@ export interface DialogProps {
   onCancel(): void;
 }
 
-export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway, onCancel }: DialogProps) {
+export function Dialog({ wildcards, optional, autofilled, lastValues, onSend, onSendAnyway, onCancel }: DialogProps) {
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...autofilled }));
   const firstEmpty = useRef<HTMLInputElement>(null);
   useEffect(() => firstEmpty.current?.focus(), []);
@@ -20,8 +22,9 @@ export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway
   // A field with a remembered value shows it as ghost text until accepted.
   const hasGhost = (w: string) => isEmpty(w) && !!lastValues[w];
   const reusable = wildcards.filter(hasGhost);
-  const complete = wildcards.every((w) => !isEmpty(w));
-  const firstEmptyWildcard = wildcards.find(isEmpty);
+  const isRequired = (w: string) => !optional.includes(w);
+  const complete = wildcards.every((w) => !isRequired(w) || !isEmpty(w));
+  const firstEmptyWildcard = wildcards.find((w) => isRequired(w) && isEmpty(w));
 
   // Decided once: if the "fill all" pill starts out useful, keep its space after it's used up so
   // the dialog doesn't jump; if it never applies, don't reserve anything.
@@ -41,7 +44,7 @@ export function Dialog({ wildcards, autofilled, lastValues, onSend, onSendAnyway
         <div class="fields">
           {wildcards.map((w) => (
             <label key={w} class="field">
-              <span class="name">{w}</span>
+              <span class="name">{w}{!isRequired(w) && <span class="optional"> optional</span>}</span>
               <WildcardInput
                 inputRef={w === firstEmptyWildcard ? firstEmpty : undefined}
                 value={values[w] ?? ''}
@@ -88,6 +91,8 @@ export const dialogCss = `
   .field { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
   .name { font: 600 11px ui-monospace, monospace; color: #5f6368; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; }
+
+  .optional { font: italic 400 11px system-ui, sans-serif; color: #80868b; }
 
   input { min-width: 0; padding: 7px 9px; border: 1px solid #dadce0; border-radius: 6px;
     font-size: 14px; color: #202124; background: #fff; }

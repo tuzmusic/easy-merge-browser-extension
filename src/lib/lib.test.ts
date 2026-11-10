@@ -9,7 +9,7 @@ import {
   type OutgoingMessage, type RowStatus, type Sender,
 } from './merge';
 import {
-  fillHTML, findWildcards, isBlankDraft, replaceWildcardsInElement, replaceWildcardsInText, textOfElement,
+  fillHTML, findOptionalWildcards, findWildcards, isBlankDraft, replaceWildcardsInElement, replaceWildcardsInText, textOfElement,
 } from './wildcards';
 
 describe('findWildcards', () => {
@@ -43,6 +43,29 @@ describe('replace', () => {
     expect(findWildcards(textOfElement(div))).toEqual(['_FULLNAME', '_FIRST_NAME', '_LAST_NAME', '_MONTH']);
     replaceWildcardsInElement(div, { _FULLNAME: 'Jane Doe', _FIRST_NAME: 'Jane', _LAST_NAME: 'Doe', _MONTH: 'May' });
     expect(div.innerHTML).toBe('full Jane Doe<div>first Jane</div><div>last Doe<br>month May</div>');
+  });
+});
+
+describe('optional sections', () => {
+  const template = 'about the _ROLE[[ on the _TEAM]].';
+  it('keeps a section whose wildcards are filled, without the brackets', () => {
+    expect(replaceWildcardsInText(template, { _ROLE: 'Engineer', _TEAM: 'Platform' })).toBe('about the Engineer on the Platform.');
+  });
+  it('drops a section with a blank wildcard', () => {
+    expect(replaceWildcardsInText(template, { _ROLE: 'Engineer' })).toBe('about the Engineer.');
+    expect(replaceWildcardsInText('[[_A and _B]] _C', { _A: 'a', _C: 'c' })).toBe(' c');
+  });
+  it('unwraps sections without wildcards, and leaves unclosed or multi-line brackets alone', () => {
+    expect(replaceWildcardsInText('a[[b]]c [[_X\n]]', {})).toBe('abc [[_X\n]]');
+  });
+  it('treats wildcards only used inside sections as optional', () => {
+    expect(findOptionalWildcards('Hi _NAME[[ at _TEAM]][[, _NAME]] [[_ROLE]] _ROLE')).toEqual(['_TEAM']);
+  });
+  it('fills sections split across spans and Gmail lines', () => {
+    expect(fillHTML('the <b>_ROLE</b>[<i>[ on the _TE</i>AM]].<div>[[P.S. _PS]]bye</div>', { _ROLE: 'Engineer' }))
+      .toBe('the <b>Engineer</b><i></i>.<div>bye</div>');
+    expect(fillHTML('the <b>_ROLE</b>[<i>[ on the _TE</i>AM]].', { _ROLE: 'Engineer', _TEAM: 'Platform' }))
+      .toBe('the <b>Engineer</b><i> on the Platform</i>.');
   });
 });
 
@@ -97,6 +120,17 @@ describe('applyValues', () => {
     );
     expect(subject).toBe('About Acme');
     expect(body.textContent).toBe('Hello Jane');
+  });
+  it('drops sections whose wildcard was left blank', () => {
+    const body = document.createElement('div');
+    body.textContent = 'about the _ROLE[[ on the _TEAM]].';
+    let subject = '_ROLE[[ (_TEAM)]]';
+    applyValues(
+      { getSubject: () => subject, setSubject: (s) => (subject = s), getBodyElement: () => body },
+      { _ROLE: 'Engineer', _TEAM: '' },
+    );
+    expect(subject).toBe('Engineer');
+    expect(body.textContent).toBe('about the Engineer.');
   });
 });
 

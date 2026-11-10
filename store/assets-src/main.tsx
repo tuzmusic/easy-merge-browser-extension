@@ -86,6 +86,7 @@ function DialogLayer({ to, lastValues }: { to: Recipient; lastValues: Record<str
         render(
           <Dialog
             wildcards={WILDCARDS}
+            optional={[]}
             autofilled={autofill(WILDCARDS, [to])}
             lastValues={lastValues}
             onSend={noop}

@@ -11,7 +11,7 @@ import { getLastValues, rememberValues } from '../lib/memory';
 import { loadTemplate, saveTemplate, type Template } from '../lib/template';
 import { showDialog, showMergeDialog } from '../ui/mount';
 import { showPopover } from '../ui/Popover';
-import { isBlankDraft, textOfElement } from '../lib/wildcards';
+import { findOptionalWildcards, isBlankDraft, textOfElement } from '../lib/wildcards';
 
 const appId = import.meta.env.VITE_INBOXSDK_APP_ID;
 if (!appId) {
@@ -73,9 +73,10 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
     };
 
     // One recipient (or a reply/forward): fill this draft in place and send it.
-    const fillAndSend = (wildcards: string[], recipients: Recipient[]) => {
+    const fillAndSend = (wildcards: string[], optional: string[], recipients: Recipient[]) => {
       showDialog({
         wildcards,
+        optional,
         autofilled: autofill(wildcards, recipients),
         lastValues: getLastValues()
       }).then((result) => {
@@ -90,7 +91,7 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
     };
 
     // Several recipients: this draft is the template; each recipient gets their own email.
-    const merge = (wildcards: string[], recipients: Recipient[]) => {
+    const merge = (wildcards: string[], optional: string[], recipients: Recipient[]) => {
       const template: Template = { subject: compose.getSubject(), html: compose.getHTMLContent() };
       const envelope: Envelope = {
         cc: compose.getCcRecipients(),
@@ -103,6 +104,7 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
 
       showMergeDialog({
         wildcards,
+        optional,
         initialRows: recipients.map((recipient) => ({
           recipient,
           values: { ...autofill(wildcards, [recipient]), ...typed?.get(recipient.emailAddress.toLowerCase()) }
@@ -160,16 +162,19 @@ InboxSDK.load(2, appId ?? '', { appName: 'EasyMerge', eventTracking: false, glob
 
     compose.on('presending', (event) => {
       if (sendingNow || merging) return;
-      const wildcards = ignoreList.pending(compose, compose.getSubject(), textOfElement(compose.getBodyElement()));
+      const subject = compose.getSubject();
+      const body = textOfElement(compose.getBodyElement());
+      const wildcards = ignoreList.pending(compose, subject, body);
       if (!wildcards.length) return;
+      const optional = findOptionalWildcards(`${subject}\n${body}`);
 
       // Must be synchronous; the dialog is async and re-sends afterwards.
       event.cancel();
 
       const recipients = uniqueRecipients(compose.getToRecipients());
       const canSplit = !compose.isReply() && !compose.isForward();
-      if (recipients.length > 1 && canSplit) merge(wildcards, recipients);
-      else fillAndSend(wildcards, recipients);
+      if (recipients.length > 1 && canSplit) merge(wildcards, optional, recipients);
+      else fillAndSend(wildcards, optional, recipients);
     });
   });
 });

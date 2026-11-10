@@ -71,6 +71,9 @@ Without an app ID, `npm run dev` loads but InboxSDK won't initialize, and `npm r
 ### Details
 
 - Wildcard syntax: `_ALLCAPS` (min 2 chars, inner underscores OK). Double-click selects the whole token.
+- Optional sections: `about the _ROLE[[ on the _TEAM]].` keeps ` on the …` when `_TEAM` is filled and
+  drops it when it's blank. A section is dropped if any wildcard in it is blank, and must fit on one
+  line. Wildcards used only inside sections are marked optional in the dialog and don't block sending.
 - Name/company aliases (which wildcard names autofill) live in `src/lib/autofill.ts`.
 - Last-used values are remembered for the Gmail tab only.
 - "Send anyway" skips the check for that compose window; closing the dialog does not.
